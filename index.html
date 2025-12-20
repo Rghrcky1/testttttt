@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>₹@ⓖ$ 𝕱✗ — Final</title>
+<link rel="icon" type="image/png" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.json">
+
+<!-- Firebase scripts -->
+<script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+
+<style>
+:root{--accent:#007bff;--bg:#f4f6fb;--card:#fff;--muted:#666}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;background:var(--bg);-webkit-font-smoothing:antialiased}
+.wrap{max-width:720px;margin:48px auto;padding:12px}
+.card{background:var(--card);border-radius:12px;padding:16px;box-shadow:0 8px 24px rgba(10,10,20,0.06)}
+h1{text-align:center;font-size:20px;margin-bottom:12px}
+label{display:block;margin-top:10px;font-weight:600;color:#222;font-size:14px}
+select,input,button{width:100%;padding:10px;border-radius:8px;border:1px solid #d6dbe6;font-size:15px;margin-top:6px}
+button{background:var(--accent);color:#fff;border:0;cursor:pointer}
+button.secondary{background:#eee;color:#111}
+.small{font-size:13px;color:#666;margin-top:8px}
+.row{display:flex;gap:8px;margin-top:10px}
+.row button{flex:1}
+.pair-list{max-height:260px;overflow:auto;border:1px solid #eee;padding:8px;border-radius:8px;background:#fafafa;margin-top:8px}
+.pair-item{display:flex;align-items:center;justify-content:space-between;padding:8px;border-bottom:1px solid #eee}
+.pair-item:last-child{border-bottom:0}
+.small-btn {
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 0;
+  background: #eee;
+  color: #111;
+  cursor: pointer;
+  font-size: 12px;
+  margin-left: 4px;
+}
+.pair-item div {
+  display: flex;
+  gap: 2px;
+}
+
+.modal{position:fixed;inset:0;display:none;align-items:flex-start;justify-content:center;background:rgba(0,0,0,0.55);z-index:9999;padding:12px;overflow-y:auto;}
+.panel{background:#fff;padding:14px;border-radius:10px;max-height:90vh;overflow-y:auto;max-width:720px;width:100%}
+#lotResult{margin-top:12px;text-align:center;font-weight:700;color:#06204a;font-size:18px;background:#e8f0ff;display:inline-block;padding:6px 12px;border-radius:8px;box-shadow:0 2px 6px rgba(10,20,60,0.06);}
+@media(max-width:480px){.row{flex-direction:column}.row button{width:100%}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>₹@ⓖ$ 𝕱✗</h1>
+
+    <!-- Authentication Section -->
+    <div id="authSection">
+      <input id="email" type="email" placeholder="Email">
+      <input id="password" type="password" placeholder="Password">
+      <input id="confirmPassword" type="password" placeholder="Confirm Password" style="display:none">
+      <div class="row" style="margin-top:10px">
+        <button id="loginBtn">Login</button>
+        <button id="signupBtn">Sign Up</button>
+        <button id="createBtn" style="display:none">Create</button>
+      </div>
+      <button class="secondary" id="forgotBtn" style="margin-top:6px">Forgot Password?</button>
+      <div id="authMsg" class="small"></div>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="adminSection" style="display:none;margin-top:20px">
+      <h3>Admin Dashboard</h3>
+      <div id="userList" class="pair-list"></div>
+    </div>
+
+    <!-- Calculator Section -->
+    <div id="calcSection" style="display:none">
+      <label for="pairSelect">Pair</label>
+      <select id="pairSelect"></select>
+      <label for="lotType">Lot type / mode</label>
+      <select id="lotType">
+        <option value="standardPoint">Standard Point Value</option>
+        <option value="miniPoint">Mini Point Value</option>
+        <option value="microPoint">Micro Point Value</option>
+        <option value="standardPip">Standard Pip Value</option>
+        <option value="miniPip">Mini Pip Value</option>
+        <option value="microPip">Micro Pip Value</option>
+      </select>
+      <label for="risk">Risk ($)</label>
+      <input id="risk" type="number" placeholder="e.g. 30">
+      <label for="sl">Stop-loss (points / pips)</label>
+      <input id="sl" type="number" placeholder="e.g. 15">
+      <div class="row">
+        <button onclick="calculateLot()">Calculate Lot Size</button>
+        <button class="secondary" onclick="clearCalc()">Clear</button>
+      </div>
+      <div id="lotResult" aria-live="polite" style="display:none"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="secondary" onclick="openModal()">Add / Edit / Sync</button>
+        <button class="secondary" id="logoutBtn" onclick="logout()">Logout</button>
+        <button class="secondary" onclick="reloadCloud()">Reload Cloud</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Editor -->
+<div id="modal" class="modal" aria-hidden="true">
+  <div class="panel" role="dialog" aria-modal="true">
+    <h3>Add / Edit / Sync Pairs</h3>
+    <div id="stepUnlock">
+      <div class="small">Enter App Password</div>
+      <input id="modalAppPw" type="password" placeholder="App password">
+      <div class="row" style="margin-top:8px">
+        <button onclick="unlockModal()">Continue</button>
+        <button class="secondary" onclick="closeModal()">Close</button>
+      </div>
+      <div id="unlockErr" class="small" style="color:#b00020"></div>
+    </div>
+    <div id="editor" style="display:none;margin-top:12px">
+      <label>Pair code (e.g. EURUSD)</label>
+      <input id="editName" placeholder="PAIR (uppercase)">
+      <label>Point value (1 standard lot)</label>
+      <input id="editPoint" type="number" placeholder="point">
+      <label>Pip value (1 standard lot)</label>
+      <input id="editPip" type="number" placeholder="pip">
+      <label>Commission ($ per 1 lot)</label>
+      <input id="editCommission" type="number" placeholder="commission">
+      <div class="row" style="margin-top:8px">
+        <button onclick="saveLocalPair()">Save Local</button>
+        <button class="secondary" onclick="openSyncArea()">Sync Cloud</button>
+        <button class="secondary" onclick="openDeleteEdit()">Delete / Edit</button>
+      </div>
+      <div style="margin-top:8px">
+        <button class="secondary" onclick="closeModal()">Close</button>
+      </div>
+
+      <!-- Sync area -->
+      <div id="syncArea" style="display:none;margin-top:12px">
+        <div class="small">Enter Cloud Password</div>
+        <input id="cloudPw" type="password" placeholder="Cloud password">
+        <div class="row" style="margin-top:8px">
+          <button onclick="unlockCloudForSync()">Unlock Cloud</button>
+          <button class="secondary" onclick="closeSyncArea()">Cancel</button>
+        </div>
+        <div id="syncListWrap" style="display:none;margin-top:10px">
+          <div class="small">Select LOCAL pairs to push to cloud</div>
+          <div id="syncList" class="pair-list"></div>
+          <div class="row" style="margin-top:8px">
+            <button onclick="pushSelectedToCloud()">Push Selected to Cloud</button>
+            <button class="secondary" onclick="closeSyncArea()">Done</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Delete/Edit area -->
+      <div id="deArea" style="display:none;margin-top:12px">
+        <div class="small">Pairs (C = cloud, L = local)</div>
+        <div id="deList" class="pair-list"></div>
+        <div class="row" style="margin-top:8px">
+          <button class="secondary" onclick="closeDeleteEdit()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===================== Firebase Projects =====================
+
+// Auth Project
+const authApp = firebase.initializeApp({
+  apiKey: "AIzaSyBf-D1KYMJ_b3_1Dog7AkJ8b0MST0fD_9g",
+  authDomain: "auth-9bef7.firebaseapp.com",
+  projectId: "auth-9bef7",
+  storageBucket: "auth-9bef7.firebasestorage.app",
+  messagingSenderId: "27179558968",
+  appId: "1:27179558968:web:cbc4c3b162ea2114c11ecd"
+}, "authApp");
+const auth = authApp.auth();
+const authDb = authApp.firestore();
+
+// Cloud Project
+const cloudApp = firebase.initializeApp({
+  apiKey: "AIzaSyAnt7Ctex3Eom36UTt1PzkOw1vCSXNBEzk",
+  authDomain: "lotcalci.firebaseapp.com",
+  projectId: "lotcalci",
+  storageBucket: "lotcalci.firebasestorage.app",
+  messagingSenderId: "662389905318",
+  appId: "1:662389905318:web:3b9963ab853374ee606167"
+}, "cloudApp");
+const db = cloudApp.firestore();
+
+// ===================== Global Vars =====================
+const APP_PASSWORD="6565";
+const CLOUD_PASSWORD="123456";
+const LOCAL_KEY="fx_pairs_v_final";
+const FIRE_COLLECTION="cloudPairs";
+let pairs={};
+
+// ===================== Load / Save Pairs =====================
+const defaultPairs = {};
+
+function loadLocalPairs(){
+  const raw = localStorage.getItem(LOCAL_KEY);
+  const saved = raw ? JSON.parse(raw) : {};
+  pairs = JSON.parse(JSON.stringify(defaultPairs));
+  Object.keys(saved).forEach(k=>pairs[k]=saved[k]);
+}
+
+function saveLocalPairs(){
+  localStorage.setItem(LOCAL_KEY, JSON.stringify(pairs));
+}
+
+function populateDropdown(){
+  const sel=document.getElementById('pairSelect');
+  if(!sel) return;
+  sel.innerHTML='';
+  const list=Object.keys(pairs).map(name=>({name,order:typeof pairs[name].order==='number'?pairs[name].order:null}));
+  list.sort((a,b)=>{
+    if(a.order!==null&&b.order!==null) return a.order-b.order;
+    if(a.order!==null) return -1;
+    if(b.order!==null) return 1;
+    return a.name.localeCompare(b.name);
+  });
+  list.forEach(({name})=>{
+    const opt=document.createElement('option');
+    opt.value=name;
+    opt.text=pairs[name].type==='cloud'?`${name} (C)`:`${name} (L)`;
+    sel.appendChild(opt);
+  });
+}
+
+// ===================== Cloud Listener =====================
+let unsubscribeSnapshot = null;
+function startCloudListener(){
+  if(unsubscribeSnapshot) unsubscribeSnapshot();
+  unsubscribeSnapshot=db.collection(FIRE_COLLECTION).onSnapshot(snapshot=>{
+    snapshot.forEach(doc=>{
+      const name=doc.id;
+      const data=doc.data();
+      const local=pairs[name];
+      pairs[name]={point:data.point??(local?local.point:0),pip:data.pip??(local?local.pip:0),commission:(local&&local.commission!==undefined)?local.commission:(data.commission??0),order:typeof data.order==='number'?data.order:(local&&typeof local.order==='number'?local.order:null),type:'cloud'};
+    });
+    const cloudIds=new Set(snapshot.docs.map(d=>d.id));
+    Object.keys(pairs).forEach(k=>{
+      if(pairs[k].type==='cloud'&&!cloudIds.has(k)){
+        if(defaultPairs[k]) pairs[k]=JSON.parse(JSON.stringify(defaultPairs[k]));
+        else delete pairs[k];
+      }
+    });
+    saveLocalPairs();
+    populateDropdown();
+  },err=>{console.warn("cloud listener error:",err)});
+}
+
+// ===================== Calculator =====================
+function calculateLot(){
+  const name=document.getElementById('pairSelect').value;
+  const lotType=document.getElementById('lotType').value;
+  const risk=parseFloat(document.getElementById('risk').value);
+  const sl=parseFloat(document.getElementById('sl').value);
+  if(!name||isNaN(risk)||isNaN(sl)||risk<=0||sl<=0){document.getElementById('lotResult').style.display='none';return;}
+  const p=pairs[name];
+  if(!p){document.getElementById('lotResult').style.display='none';return;}
+  const comm=Number(p.commission||0);
+  let v=0;
+  switch(lotType){
+    case "standardPoint": v=p.point; break;
+    case "miniPoint": v=p.point/10; break;
+    case "microPoint": v=p.point/100; break;
+    case "standardPip": v=p.pip; break;
+    case "miniPip": v=p.pip/10; break;
+    case "microPip": v=p.pip/100; break;
+  }
+  const lot=risk/(sl*v+comm);
+  const amt=lot*sl*v, comAmt=lot*comm, total=amt+comAmt;
+  const el=document.getElementById('lotResult');
+  el.innerHTML=`<span style="font-size:19px;font-weight:700;">LotSize = ${lot.toFixed(2)}</span>
+  <span style="font-size:14px;margin-left:6px;">(Amt=${amt.toFixed(2)}, Com=${comAmt.toFixed(2)}, Total=${total.toFixed(2)})</span>`;
+  el.style.display='inline-block';
+}
+function clearCalc(){document.getElementById('risk').value='';document.getElementById('sl').value='';document.getElementById('lotResult').style.display='none';}
+
+// ===================== Modal & Local / Cloud =====================
+function openModal(){
+  document.getElementById('modal').style.display='flex';
+  document.getElementById('stepUnlock').style.display='block';
+  document.getElementById('editor').style.display='none';
+  document.getElementById('unlockErr').innerText='';
+  document.getElementById('modalAppPw').value='';
+}
+
+function closeModal(){document.getElementById('modal').style.display='none';closeSyncArea();closeDeleteEdit();}
+
+function unlockModal(){
+  const v=(document.getElementById('modalAppPw').value||'').trim();
+  const stored=localStorage.getItem(LOCAL_KEY+"_pw")||APP_PASSWORD;
+  if(v===stored){
+    document.getElementById('stepUnlock').style.display='none';
+    document.getElementById('editor').style.display='block';
+    const sel=document.getElementById('pairSelect').value;
+    if(pairs[sel]){
+      document.getElementById('editName').value=sel;
+      document.getElementById('editPoint').value=pairs[sel].point;
+      document.getElementById('editPip').value=pairs[sel].pip;
+      document.getElementById('editCommission').value=pairs[sel].commission;
+    } else {
+      document.getElementById('editName').value='';document.getElementById('editPoint').value='';document.getElementById('editPip').value='';document.getElementById('editCommission').value='';
+    }
+  } else document.getElementById('unlockErr').innerText="Wrong app password.";
+}
+
+// ===================== Save / Sync / Delete =====================
+function saveLocalPair(){
+  const name=(document.getElementById('editName').value||'').toUpperCase().trim();
+  const point=parseFloat(document.getElementById('editPoint').value);
+  const pip=parseFloat(document.getElementById('editPip').value);
+  const commission=parseFloat(document.getElementById('editCommission').value);
+  if(!name||isNaN(point)||isNaN(pip)||isNaN(commission)){alert("Enter valid name, point, pip and commission.");return;}
+  const existing=pairs[name];
+  const type=existing&&existing.type==='cloud'?'cloud':'local';
+  pairs[name]={point,pip,commission,type};
+  saveLocalPairs();populateDropdown();
+  alert(name+" saved locally.");
+}
+
+// ===================== Cloud Sync =====================
+let cloudUnlocked=false;
+function openSyncArea(){
+  cloudUnlocked=false;
+  document.getElementById('syncArea').style.display='block';
+  document.getElementById('cloudPw').value='';
+  document.getElementById('syncListWrap').style.display='none';
+  populateLocalSyncList();
+}
+function closeSyncArea(){document.getElementById('syncArea').style.display='none';document.getElementById('syncList').innerHTML='';document.getElementById('syncListWrap').style.display='none';cloudUnlocked=false;}
+function populateLocalSyncList(){
+  const wrap=document.getElementById('syncList');if(!wrap)return;wrap.innerHTML='';
+  Object.keys(pairs).sort().forEach(name=>{
+    if(pairs[name].type!=='local') return;
+    const div=document.createElement('div');div.className='pair-item';
+    div.innerHTML=`<span>${name}</span><input type="checkbox" data-name="${name}">`;
+    wrap.appendChild(div);
+  });
+}
+function unlockCloudForSync(){
+  const pw=document.getElementById('cloudPw').value.trim();
+  if(pw===CLOUD_PASSWORD){
+    cloudUnlocked=true;
+    document.getElementById('syncListWrap').style.display='block';
+  } else {alert("Wrong cloud password.");}
+}
+function pushSelectedToCloud(){
+  if(!cloudUnlocked) {alert("Unlock cloud first."); return;}
+  const checkboxes=document.querySelectorAll('#syncList input[type=checkbox]:checked');
+  checkboxes.forEach(cb=>{
+    const name=cb.dataset.name;
+    const data=pairs[name];
+    db.collection(FIRE_COLLECTION).doc(name).set({
+      point:data.point,
+      pip:data.pip,
+      commission:data.commission
+    });
+    pairs[name].type='cloud';
+  });
+  saveLocalPairs();populateDropdown();
+  alert("Selected pairs pushed to cloud.");
+}
+
+// ===================== Delete / Edit =====================
+function openDeleteEdit(){
+  const wrap=document.getElementById('deList');wrap.innerHTML='';
+  Object.keys(pairs).sort().forEach(name=>{
+    const div=document.createElement('div');div.className='pair-item';
+    const btns=document.createElement('div');
+    const del=document.createElement('button');del.className='small-btn';del.textContent='Delete';del.onclick=()=>{if(confirm("Delete "+name+"?")){delete pairs[name];saveLocalPairs();populateDropdown();openDeleteEdit();}};
+    const up=document.createElement('button');up.className='small-btn';up.textContent='↑';up.onclick=()=>{moveUp(name);openDeleteEdit();};
+    const down=document.createElement('button');down.className='small-btn';down.textContent='↓';down.onclick=()=>{moveDown(name);openDeleteEdit();};
+    btns.appendChild(del);btns.appendChild(up);btns.appendChild(down);
+    div.innerHTML=`<span>${name} (${pairs[name].type==='cloud'?'C':'L'})</span>`;
+    div.appendChild(btns);
+    wrap.appendChild(div);
+  });
+  document.getElementById('deArea').style.display='block';
+}
+function closeDeleteEdit(){document.getElementById('deArea').style.display='none';}
+function getOrderedKeys(){
+  return Object.keys(pairs)
+    .map(k => ({ k, order: pairs[k].order ?? 9999 }))
+    .sort((a,b) => a.order - b.order)
+    .map(o => o.k);
+}
+
+function applyOrderFromArray(arr){
+  arr.forEach((k,i)=>{
+    pairs[k].order = i;
+  });
+}
+
+function moveUp(name){
+  const arr = getOrderedKeys();
+  const idx = arr.indexOf(name);
+  if(idx > 0){
+    [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
+    applyOrderFromArray(arr);
+    saveLocalPairs();
+    populateDropdown();
+    openDeleteEdit();
+  }
+}
+
+function moveDown(name){
+  const arr = getOrderedKeys();
+  const idx = arr.indexOf(name);
+  if(idx < arr.length - 1){
+    [arr[idx+1], arr[idx]] = [arr[idx], arr[idx+1]];
+    applyOrderFromArray(arr);
+    saveLocalPairs();
+    populateDropdown();
+    openDeleteEdit();
+  }
+}
+
+
+// ===================== Login / Signup / Logout =====================
+function login(){const e=document.getElementById('email').value.trim(),p=document.getElementById('password').value;auth.signInWithEmailAndPassword(e,p).then(()=>{document.getElementById('authSection').style.display='none';document.getElementById('calcSection').style.display='block';loadLocalPairs();populateDropdown();startCloudListener();}).catch(err=>{document.getElementById('authMsg').innerText=err.message});}
+function signup(){document.getElementById('confirmPassword').style.display='block';document.getElementById('createBtn').style.display='inline-block';document.getElementById('signupBtn').style.display='none';}
+function create(){const e=document.getElementById('email').value.trim(),p=document.getElementById('password').value,cp=document.getElementById('confirmPassword').value;if(p!==cp){document.getElementById('authMsg').innerText="Passwords do not match";return;}auth.createUserWithEmailAndPassword(e,p).then(()=>{document.getElementById('authMsg').innerText="User created. Login now.";document.getElementById('confirmPassword').style.display='none';document.getElementById('createBtn').style.display='none';document.getElementById('signupBtn').style.display='inline-block';}).catch(err=>{document.getElementById('authMsg').innerText=err.message});}
+function logout(){auth.signOut();document.getElementById('calcSection').style.display='none';document.getElementById('authSection').style.display='block';document.getElementById('authMsg').innerText='';}
+
+// ===================== Reload Cloud =====================
+function reloadCloud(){startCloudListener();}
+ 
+// ===================== Event Listeners =====================
+document.getElementById('loginBtn').onclick=login;
+document.getElementById('signupBtn').onclick=signup;
+document.getElementById('createBtn').onclick=create;
+document.getElementById('logoutBtn').onclick=logout;
+
+</script>
+</body>
+</html>
