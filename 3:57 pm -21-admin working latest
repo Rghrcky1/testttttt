@@ -54,7 +54,7 @@ button.secondary{background:#eee;color:#111}
 <body>
 <div class="wrap">
   <div class="card">
-    <h1>₹@ⓖ$ 𝕱✗a</h1>
+    <h1>₹@ⓖ$ 𝕱✗112</h1>
 
     <!-- Authentication Section -->
     <div id="authSection">
@@ -70,13 +70,8 @@ button.secondary{background:#eee;color:#111}
       <div id="authMsg" class="small"></div>
     </div>
 
-    <!-- Admin Dashboard -->
-    <div id="adminSection" style="display:none;margin-top:20px">
-      <h3>Admin Dashboard</h3>
-      <div id="userList" class="pair-list"></div>
-     <h3>Audit Log</h3>
-      <div id="auditList" class="pair-list"></div>
-    </div>
+   <!-- Admin Dashboard REMOVED from main page -->
+
 
     <!-- Calculator Section -->
     <div id="calcSection" style="display:none; pointer-events:none; opacity:0.5">
@@ -123,11 +118,16 @@ button.secondary{background:#eee;color:#111}
       <input id="editPip" type="number" placeholder="pip">
       <label>Commission ($ per 1 lot)</label>
       <input id="editCommission" type="number" placeholder="commission">
-      <div class="row" style="margin-top:8px">
-        <button onclick="saveLocalPair()">Save Local</button>
-        <button class="secondary" onclick="openSyncArea()">Sync Cloud</button>
-        <button class="secondary" onclick="openDeleteEdit()">Delete / Edit</button>
-      </div>
+    <div class="row" style="margin-top:8px">
+  <button onclick="saveLocalPair()">Save Local</button>
+  <button class="secondary" onclick="openSyncArea()">Sync Cloud</button>
+  <button class="secondary" onclick="openDeleteEdit()">Delete / Edit</button>
+</div>
+
+<div class="row" style="margin-top:8px">
+  <button class="secondary" id="adminPanelBtn" style="display:none" onclick="openAdminGate()">Admin Panel</button>
+</div>
+
       <div style="margin-top:8px">
         <button class="secondary" onclick="closeModal()">Close</button>
       </div>
@@ -151,6 +151,25 @@ button.secondary{background:#eee;color:#111}
       </div>
 
       <!-- Delete/Edit area -->
+      <!-- Admin Gate -->
+<div id="adminGate" style="display:none;margin-top:12px">
+  <div class="small">Enter Admin Password</div>
+  <input id="adminPw" type="password" placeholder="Admin password">
+  <div class="row" style="margin-top:8px">
+    <button onclick="unlockAdmin()">Unlock</button>
+    <button class="secondary" onclick="closeAdmin()">Cancel</button>
+  </div>
+</div>
+
+<!-- Admin Dashboard -->
+<div id="adminPanel" style="display:none;margin-top:12px">
+  <h3>Pending Approvals</h3>
+  <div id="userList" class="pair-list"></div>
+  <div class="row" style="margin-top:8px">
+    <button class="secondary" onclick="closeAdmin()">Close</button>
+  </div>
+</div>
+
       <div id="deArea" style="display:none;margin-top:12px">
         <div class="small">Pairs (C = cloud, L = local)</div>
         <div id="deList" class="pair-list"></div>
@@ -190,8 +209,10 @@ const db = cloudApp.firestore();
 
 // ===================== Global Vars =====================
 const CLOUD_PASSWORD="123456";
-const LOCAL_KEY="fx_pairs_v_final";
+  
+  const LOCAL_KEY="fx_pairs_v_final";
 const FIRE_COLLECTION="cloudPairs";
+  
 let pairs={};
 let USER_APPROVED = false;
 
@@ -289,7 +310,7 @@ function openModal(){
   document.getElementById('modal').style.display='flex';
   document.getElementById('stepUnlock')?.remove();
   document.getElementById('editor').style.display='block';
-
+  document.getElementById('adminPanelBtn').style.display = 'none';
   const sel=document.getElementById('pairSelect').value;
   if(pairs[sel]){
     document.getElementById('editName').value=sel;
@@ -302,9 +323,23 @@ function openModal(){
     document.getElementById('editPip').value='';
     document.getElementById('editCommission').value='';
   }
+  if(window.IS_ADMIN){
+    document.getElementById('adminPanelBtn').style.display = 'block';
+  }
 }
 
-function closeModal(){document.getElementById('modal').style.display='none';closeSyncArea();closeDeleteEdit();}
+function closeModal(){
+  document.getElementById('modal').style.display='none';
+
+  closeSyncArea();
+  closeDeleteEdit();
+
+  // reset admin modal state
+  document.getElementById('adminGate').style.display = 'none';
+  document.getElementById('adminPanel').style.display = 'none';
+  document.getElementById('adminPw').value = '';
+}
+
 
 // ===================== Save / Sync / Delete =====================
 function saveLocalPair(){
@@ -558,39 +593,50 @@ function approveUser(uid){
   authDb.collection("users").doc(uid).update({
     approved: true
   }).then(()=>{
-    authDb.collection("auditLogs").add({
-      approvedUser: uid,
-      adminUid: adminUid,
-      approvedAt: approvedAt
-    });
+   
     loadPendingUsers();
-    loadAuditLogs();
+    
+  });
+}
+/* ===== ADMIN MODAL FUNCTIONS (ADD HERE) ===== */
+
+function openAdminGate(){
+  document.getElementById('adminGate').style.display = 'block';
+  document.getElementById('adminPanel').style.display = 'none';
+  document.getElementById('adminPw').value = '';
+}
+
+function unlockAdmin(){
+  const pw = document.getElementById('adminPw').value.trim();
+  if(!pw) return;
+
+  authDb.collection("config").doc("admin").get().then(doc=>{
+    console.log("ADMIN DOC EXISTS:", doc.exists);
+    console.log("ADMIN DATA:", doc.data());
+    console.log("ENTERED PW:", pw);
+
+    if(!doc.exists || doc.data().password !== pw){
+      alert("Wrong admin password");
+      return;
+    }
+
+    document.getElementById('adminGate').style.display = 'none';
+    document.getElementById('adminPanel').style.display = 'block';
+    loadPendingUsers();
   });
 }
 
-function loadAuditLogs(){
-  const list = document.getElementById('auditList');
-  list.innerHTML = "Loading...";
 
-  authDb.collection("auditLogs")
-    .orderBy("approvedAt","desc")
-    .limit(20)
-    .get()
-    .then(snapshot=>{
-      list.innerHTML = "";
-      if(snapshot.empty){
-        list.innerHTML = "<div class='small'>No approvals yet</div>";
-        return;
-      }
-      snapshot.forEach(doc=>{
-        const data = doc.data();
-        const div = document.createElement("div");
-        div.className = "pair-item";
-        div.textContent = `User: ${data.approvedUser} | Admin: ${data.adminUid} | ${data.approvedAt?.toDate() || ''}`;
-        list.appendChild(div);
-      });
-    });
+
+function closeAdmin(){
+  document.getElementById('adminGate').style.display = 'none';
+  document.getElementById('adminPanel').style.display = 'none';
 }
+
+/* ===== END ADMIN MODAL FUNCTIONS ===== */
+
+
+
 
 // ===================== Reload Cloud =====================
 function reloadCloud(){startCloudListener();}
@@ -638,15 +684,13 @@ auth.onAuthStateChanged(user=>{
       calc.style.pointerEvents = "auto";
       calc.style.opacity = "1";
 
-      if(doc.data().role === "admin"){
-        document.getElementById('adminSection').style.display='block';
-        loadPendingUsers();
-        loadAuditLogs();
-      } else {
-        document.getElementById('adminSection').style.display='none';
-      }
+  if(doc.data().role === "admin"){
+  window.IS_ADMIN = true;
+} else {
+  window.IS_ADMIN = false;
+}
 
-      loadLocalPairs();
+       loadLocalPairs();
       populateDropdown();
       startCloudListener();
     });
