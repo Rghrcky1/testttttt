@@ -54,7 +54,7 @@ button.secondary{background:#eee;color:#111}
 <body>
 <div class="wrap">
   <div class="card">
-    <h1>₹@ⓖ$ 𝕱✗112</h1>
+    <h1>₹@ⓖ$ 𝕱✗1223</h1>
 
     <!-- Authentication Section -->
     <div id="authSection">
@@ -120,8 +120,8 @@ button.secondary{background:#eee;color:#111}
       <input id="editCommission" type="number" placeholder="commission">
     <div class="row" style="margin-top:8px">
   <button onclick="saveLocalPair()">Save Local</button>
-  <button class="secondary" onclick="openSyncArea()">Sync Cloud</button>
-  <button class="secondary" onclick="openDeleteEdit()">Delete / Edit</button>
+  
+   <button class="secondary" onclick="openDeleteEdit()">Delete / Edit</button>
 </div>
 
 <div class="row" style="margin-top:8px">
@@ -132,23 +132,17 @@ button.secondary{background:#eee;color:#111}
         <button class="secondary" onclick="closeModal()">Close</button>
       </div>
 
-      <!-- Sync area -->
-      <div id="syncArea" style="display:none;margin-top:12px">
-        <div class="small">Enter Cloud Password</div>
-        <input id="cloudPw" type="password" placeholder="Cloud password">
-        <div class="row" style="margin-top:8px">
-          <button onclick="unlockCloudForSync()">Unlock Cloud</button>
-          <button class="secondary" onclick="closeSyncArea()">Cancel</button>
-        </div>
-        <div id="syncListWrap" style="display:none;margin-top:10px">
-          <div class="small">Select LOCAL pairs to push to cloud</div>
-          <div id="syncList" class="pair-list"></div>
-          <div class="row" style="margin-top:8px">
-            <button onclick="pushSelectedToCloud()">Push Selected to Cloud</button>
-            <button class="secondary" onclick="closeSyncArea()">Done</button>
-          </div>
-        </div>
-      </div>
+     <!-- Sync area (for Admin Panel) -->
+<div id="syncArea" style="display:none;margin-top:12px">
+  <div class="small">Select LOCAL pairs to push to cloud</div>
+  <div id="syncListWrap" style="display:block;margin-top:10px">
+    <div id="syncList" class="pair-list"></div>
+    <div class="row" style="margin-top:8px">
+      <button onclick="pushSelectedToCloud()">Push Selected to Cloud</button>
+      <button class="secondary" onclick="closeSyncArea()">Done</button>
+    </div>
+  </div>
+</div>
 
       <!-- Delete/Edit area -->
       <!-- Admin Gate -->
@@ -164,8 +158,13 @@ button.secondary{background:#eee;color:#111}
 <!-- Admin Dashboard -->
 <div id="adminPanel" style="display:none;margin-top:12px">
   <h3>Pending Approvals</h3>
+  <div class="row" style="margin-top:8px">
+  <button onclick="openSyncCloudAdmin()">Sync Cloud</button>
+</div>
+
   <div id="userList" class="pair-list"></div>
   <div class="row" style="margin-top:8px">
+    
     <button class="secondary" onclick="closeAdmin()">Close</button>
   </div>
 </div>
@@ -363,13 +362,27 @@ function saveLocalPair(){
 
 // ===================== Cloud Sync =====================
 let cloudUnlocked=false;
-function openSyncArea(){
-  cloudUnlocked=false;
-  document.getElementById('syncArea').style.display='block';
-  document.getElementById('cloudPw').value='';
-  document.getElementById('syncListWrap').style.display='none';
-  populateLocalSyncList();
+function openSyncCloudAdmin(){
+  cloudUnlocked = true; // Admin bypass
+  const syncArea = document.getElementById('syncArea');
+  const syncListWrap = document.getElementById('syncListWrap');
+
+  // Show sync area
+  syncArea.style.display = 'block';
+  syncListWrap.style.display = 'block';
+
+  // Populate local pairs
+  const wrap = document.getElementById('syncList');
+  wrap.innerHTML = '';
+  Object.keys(pairs).sort().forEach(name => {
+    if(pairs[name].type !== 'local') return; // only local pairs
+    const div = document.createElement('div');
+    div.className = 'pair-item';
+    div.innerHTML = `<span>${name}</span><input type="checkbox" data-name="${name}">`;
+    wrap.appendChild(div);
+  });
 }
+
 function closeSyncArea(){document.getElementById('syncArea').style.display='none';document.getElementById('syncList').innerHTML='';document.getElementById('syncListWrap').style.display='none';cloudUnlocked=false;}
 function populateLocalSyncList(){
   const wrap=document.getElementById('syncList');if(!wrap)return;wrap.innerHTML='';
