@@ -54,7 +54,7 @@ button.secondary{background:#eee;color:#111}
 <body>
 <div class="wrap">
   <div class="card">
-    <h1>₹@ⓖ$ 𝕱✗123</h1>
+    <h1>₹@ⓖ$ 𝕱✗2</h1>
 
     <!-- Authentication Section -->
     <div id="authSection">
@@ -481,15 +481,24 @@ function create(){
     return;
   }
 
-  auth.createUserWithEmailAndPassword(e,p)
-    .then(cred=>{
-      return authDb.collection("users").doc(cred.user.uid).set({
-        email: e,
-        approved: false,
-        role: "user",
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-    })
+auth.createUserWithEmailAndPassword(e,p)
+  .then(cred=>{
+    // SEND VERIFICATION EMAIL
+    cred.user.sendEmailVerification();
+
+    return authDb.collection("users").doc(cred.user.uid).set({
+      email: e,
+      approved: false,
+      emailVerified: false,
+      role: "user",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  })
+  .then(()=>{
+    document.getElementById('authMsg').innerText =
+      "Account created. Verify your email first. Then wait for admin approval.";
+    auth.signOut();
+  })
     .then(()=>{
       document.getElementById('authMsg').innerText = "Account created. Waiting for admin approval.";
       document.getElementById('confirmPassword').style.display='none';
@@ -510,8 +519,9 @@ function loadPendingUsers(){
   const list = document.getElementById('userList');
   list.innerHTML = "Loading...";
 
-  authDb.collection("users")
-    .where("approved", "==", false)
+ authDb.collection("users")
+  .where("approved", "==", false)
+  .where("emailVerified", "==", true)
     .get()
     .then(snapshot=>{
       list.innerHTML = "";
@@ -585,6 +595,7 @@ function loadAuditLogs(){
 // ===================== Reload Cloud =====================
 function reloadCloud(){startCloudListener();}
 
+
 // ===================== Auth State Listener =====================
 auth.onAuthStateChanged(user=>{
   if(!user){
@@ -594,35 +605,54 @@ auth.onAuthStateChanged(user=>{
     return;
   }
 
-  authDb.collection("users").doc(user.uid).get().then(doc=>{
-    if(!doc.exists || doc.data().approved !== true){
-      alert("Waiting for admin approval");
-      USER_APPROVED = false;
+  // Refresh user to get latest verification status
+  user.reload().then(()=>{
+    if(!user.emailVerified){
+      alert("Please verify your email first.");
       auth.signOut();
       return;
     }
 
-    // APPROVED USER
-    USER_APPROVED = true;
-    document.getElementById('authSection').style.display='none';
-    document.getElementById('calcSection').style.display='block';
+    const userRef = authDb.collection("users").doc(user.uid);
 
-    const calc = document.getElementById('calcSection');
-    calc.style.pointerEvents = "auto";
-    calc.style.opacity = "1";
+    userRef.get().then(doc=>{
+      if(!doc.exists) return;
 
-    if(doc.data().role === "admin"){
-      document.getElementById('adminSection').style.display = 'block';
-      loadPendingUsers();
-      loadAuditLogs();
-    } else {
-      document.getElementById('adminSection').style.display = 'none';
-    }
+      // Update Firestore once
+      if(doc.data().emailVerified !== true){
+        userRef.update({ emailVerified: true });
+      }
 
-    loadLocalPairs();
-    populateDropdown();
-    startCloudListener();
+      if(doc.data().approved !== true){
+        alert("Email verified. Waiting for admin approval.");
+        auth.signOut();
+        return;
+      }
+
+      // FULLY APPROVED USER
+      USER_APPROVED = true;
+      document.getElementById('authSection').style.display='none';
+      document.getElementById('calcSection').style.display='block';
+
+      const calc = document.getElementById('calcSection');
+      calc.style.pointerEvents = "auto";
+      calc.style.opacity = "1";
+
+      if(doc.data().role === "admin"){
+        document.getElementById('adminSection').style.display='block';
+        loadPendingUsers();
+        loadAuditLogs();
+      } else {
+        document.getElementById('adminSection').style.display='none';
+      }
+
+      loadLocalPairs();
+      populateDropdown();
+      startCloudListener();
+    });
   });
+
+
 });
 
 // ===================== Event Listeners =====================
