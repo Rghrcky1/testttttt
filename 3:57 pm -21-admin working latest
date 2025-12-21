@@ -54,7 +54,7 @@ button.secondary{background:#eee;color:#111}
 <body>
 <div class="wrap">
   <div class="card">
-    <h1>₹@ⓖ$ 𝕱✗2</h1>
+    <h1>₹@ⓖ$ 𝕱✗a</h1>
 
     <!-- Authentication Section -->
     <div id="authSection">
@@ -74,7 +74,7 @@ button.secondary{background:#eee;color:#111}
     <div id="adminSection" style="display:none;margin-top:20px">
       <h3>Admin Dashboard</h3>
       <div id="userList" class="pair-list"></div>
-      <h3>Audit Log</h3>
+     <h3>Audit Log</h3>
       <div id="auditList" class="pair-list"></div>
     </div>
 
@@ -521,7 +521,7 @@ function loadPendingUsers(){
 
  authDb.collection("users")
   .where("approved", "==", false)
-  .where("emailVerified", "==", true)
+  
     .get()
     .then(snapshot=>{
       list.innerHTML = "";
