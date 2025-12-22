@@ -422,49 +422,65 @@ function pushSelectedToCloud(){
 
 // ===================== Delete / Edit =====================
 function openDeleteEdit(){
-  const wrap=document.getElementById('deList');
-  wrap.innerHTML='';
+const wrap=document.getElementById('deList');
+wrap.innerHTML='';
 
-  getOrderedKeys().forEach(name=>{
-    const div=document.createElement('div');
-    div.className='pair-item';
 
-    const btns=document.createElement('div');
+getOrderedKeys().forEach(name=>{
+const div=document.createElement('div');
+div.className='pair-item';
 
-    const del=document.createElement('button');
-    del.className='small-btn';
-    del.textContent='Delete';
-    del.onclick=()=>{
-      if(confirm("Delete "+name+"?")){
-        delete pairs[name];
-        saveLocalPairs();
-        populateDropdown();
-        openDeleteEdit();
-      }
-    };
 
-    const up=document.createElement('button');
-    up.className='small-btn';
-    up.textContent='↑';
-    up.onclick=()=>moveUp(name);
+const label=document.createElement('span');
+label.textContent=`${name} (${pairs[name].type==='cloud'?'C':'L'})`;
 
-    const down=document.createElement('button');
-    down.className='small-btn';
-    down.textContent='↓';
-    down.onclick=()=>moveDown(name);
 
-    btns.appendChild(del);
-    btns.appendChild(up);
-    btns.appendChild(down);
+const btns=document.createElement('div');
 
-    div.innerHTML=`<span>${name} (${pairs[name].type==='cloud'?'C':'L'})</span>`;
-    div.appendChild(btns);
-    wrap.appendChild(div);
-  });
 
-  document.getElementById('deArea').style.display='block';
+// DELETE — ONLY LOCAL
+if(pairs[name].type !== 'cloud'){
+const del=document.createElement('button');
+del.className='small-btn';
+del.textContent='Delete';
+del.onclick=()=>{
+if(confirm("Delete "+name+"?")){
+delete pairs[name];
+saveLocalPairs();
+populateDropdown();
+openDeleteEdit();
+}
+};
+btns.appendChild(del);
 }
 
+
+// MOVE UP
+const up=document.createElement('button');
+up.className='small-btn';
+up.textContent='↑';
+up.onclick=()=>moveUp(name);
+
+
+// MOVE DOWN
+const down=document.createElement('button');
+down.className='small-btn';
+down.textContent='↓';
+down.onclick=()=>moveDown(name);
+
+
+btns.appendChild(up);
+btns.appendChild(down);
+
+
+div.appendChild(label);
+div.appendChild(btns);
+wrap.appendChild(div);
+});
+
+
+document.getElementById('deArea').style.display='block';
+}
 function closeDeleteEdit(){document.getElementById('deArea').style.display='none';}
 function getOrderedKeys(){
   return Object.keys(pairs)
