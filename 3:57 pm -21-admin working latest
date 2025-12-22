@@ -54,7 +54,7 @@ button.secondary{background:#eee;color:#111}
 <body>
 <div class="wrap">
   <div class="card">
-    <h1>₹@ⓖ$ 𝕱✗1223</h1>
+    <h1>₹@ⓖ$ 𝕱✗4</h1>
 
     <!-- Authentication Section -->
     <div id="authSection">
@@ -358,6 +358,8 @@ function saveLocalPair(){
 
   saveLocalPairs();
   populateDropdown();
+  
+  alert(`Local pair "${name}" saved successfully.`);
 }
 
 // ===================== Cloud Sync =====================
@@ -371,15 +373,120 @@ function openSyncCloudAdmin(){
   syncArea.style.display = 'block';
   syncListWrap.style.display = 'block';
 
-  // Populate local pairs
+  // Populate local and cloud pairs
   const wrap = document.getElementById('syncList');
   wrap.innerHTML = '';
+
   Object.keys(pairs).sort().forEach(name => {
-    if(pairs[name].type !== 'local') return; // only local pairs
+    const p = pairs[name];
     const div = document.createElement('div');
     div.className = 'pair-item';
-    div.innerHTML = `<span>${name}</span><input type="checkbox" data-name="${name}">`;
+
+    const span = document.createElement('span');
+    span.textContent = `${name} (${p.type==='cloud'?'C':'L'})`;
+
+    const btns = document.createElement('div');
+
+    if(p.type === 'local'){
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.name = name;
+      btns.appendChild(cb);
+    } else if(p.type === 'cloud'){
+      const edit = document.createElement('button');
+      edit.className = 'small-btn';
+      edit.textContent = 'Edit';
+      edit.onclick = () => openEditCloudPair(name);
+
+      const del = document.createElement('button');
+      del.className = 'small-btn';
+      del.textContent = 'Delete';
+      del.onclick = () => {
+        if(confirm("Delete cloud pair "+name+"?")){
+          db.collection(FIRE_COLLECTION).doc(name).delete();
+          delete pairs[name];
+          saveLocalPairs();
+          openSyncCloudAdmin();
+        }
+      };
+
+      btns.appendChild(edit);
+      btns.appendChild(del);
+    }
+
+    div.appendChild(span);
+    div.appendChild(btns);
     wrap.appendChild(div);
+  });
+}
+function openEditCloudPair(name){
+  const modal = document.getElementById('modal');
+  modal.style.display = 'flex';
+
+  const editor = document.getElementById('editor');
+  editor.style.display = 'block';
+
+  document.getElementById('editName').value = name;
+  document.getElementById('editPoint').value = pairs[name].point;
+  document.getElementById('editPip').value = pairs[name].pip;
+  document.getElementById('editCommission').value = pairs[name].commission;
+
+  // Add buttons: Save, Clear, Close
+  const existingBtns = document.getElementById('editorBtns');
+  if(existingBtns) existingBtns.remove();
+
+  const btnDiv = document.createElement('div');
+  btnDiv.id = 'editorBtns';
+  btnDiv.className = 'row';
+  btnDiv.style.marginTop = '8px';
+
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = 'Save';
+  saveBtn.onclick = () => saveCloudEdit(name);
+
+  const clearBtn = document.createElement('button');
+  clearBtn.textContent = 'Clear';
+  clearBtn.className = 'secondary';
+  clearBtn.onclick = () => {
+    document.getElementById('editPoint').value = '';
+    document.getElementById('editPip').value = '';
+    document.getElementById('editCommission').value = '';
+  };
+
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Close';
+  closeBtn.className = 'secondary';
+  closeBtn.onclick = closeModal;
+
+  btnDiv.appendChild(saveBtn);
+  btnDiv.appendChild(clearBtn);
+  btnDiv.appendChild(closeBtn);
+
+  editor.appendChild(btnDiv);
+}
+function saveCloudEdit(name){
+  const point = parseFloat(document.getElementById('editPoint').value);
+  const pip = parseFloat(document.getElementById('editPip').value);
+  const commission = parseFloat(document.getElementById('editCommission').value);
+
+  if(isNaN(point) || isNaN(pip) || isNaN(commission)){
+    alert("Enter valid point, pip and commission.");
+    return;
+  }
+
+  // Update Firestore
+  db.collection(FIRE_COLLECTION).doc(name).set({
+    point,
+    pip,
+    commission
+  }).then(()=>{
+    pairs[name].point = point;
+    pairs[name].pip = pip;
+    pairs[name].commission = commission;
+    saveLocalPairs();
+    populateDropdown();
+    alert("Cloud pair updated successfully");
+    openSyncCloudAdmin();
   });
 }
 
