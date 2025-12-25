@@ -114,7 +114,7 @@ button.secondary{background:#eee;color:#111}
 
 <div class="wrap">
   <div class="card">
-    <h1>R-Calculator2 </h1>
+    <h1>R-Calculator6</h1>
 
     <!-- Authentication Section -->
     <div id="authSection">
@@ -198,6 +198,45 @@ button.secondary{background:#eee;color:#111}
     <button style="margin-top:14px;" onclick="closeInfoModal()">OK</button>
   </div>
 </div>
+<!-- ADMIN PANEL POPUP MODAL -->
+<div id="adminPopup" class="modal" style="display:none;">
+  <div class="panel" role="dialog" aria-modal="true" style="max-width:720px;">
+    <h3>Admin Panel</h3>
+
+    <!-- Password Unlock -->
+    <div id="adminPopupGate" style="margin-top:12px">
+      <label>Enter Admin Password</label>
+      <input id="adminPopupPw" type="password" placeholder="Admin password">
+      <div class="row" style="margin-top:8px">
+        <button onclick="unlockAdminPopup()">Unlock</button>
+        <button class="secondary" onclick="closeAdminPopup()">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Admin Tabs -->
+    <div id="adminPopupContent" style="display:none; margin-top:12px">
+      <div class="row">
+        <button id="adminTabSync" onclick="showAdminTab('sync')">Sync Cloud</button>
+        <button id="adminTabApproval" onclick="showAdminTab('approval')">Approvals</button>
+      </div>
+
+      <!-- Sync Cloud Tab -->
+      <div id="adminSyncTab" style="display:none; margin-top:12px">
+       
+        <div id="adminSyncList" class="pair-list" style="margin-top:8px"></div>
+      </div>
+
+      <!-- Approvals Tab -->
+      <div id="adminApprovalTab" style="display:none; margin-top:12px">
+        <div id="adminApprovalList" class="pair-list"></div>
+      </div>
+
+      <div style="margin-top:12px">
+        <button class="secondary" onclick="closeAdminPopup()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 
 <!-- Modal Editor -->
@@ -221,50 +260,14 @@ button.secondary{background:#eee;color:#111}
 </div>
 
 <div class="row" style="margin-top:8px">
-  <button class="secondary" id="adminPanelBtn" style="display:none" onclick="openAdminGate()">Admin Panel</button>
+  <button class="secondary" id="adminPanelBtn" style="display:none" onclick="openAdminPopup()">Admin Panel</button>
+
 </div>
 
       <div style="margin-top:8px">
         <button class="secondary" onclick="closeModal()">Close</button>
       </div>
-
-     <!-- Sync area (for Admin Panel) -->
-<div id="syncArea" style="display:none;margin-top:12px">
-  <div class="small">Select LOCAL pairs to push to cloud</div>
-  <div id="syncListWrap" style="display:block;margin-top:10px">
-    <div id="syncList" class="pair-list"></div>
-    <div class="row" style="margin-top:8px">
-      <button onclick="pushSelectedToCloud()">Push Selected to Cloud</button>
-      <button class="secondary" onclick="closeSyncArea()">Done</button>
-    </div>
-  </div>
-</div>
-
-      <!-- Delete/Edit area -->
-      <!-- Admin Gate -->
-<div id="adminGate" style="display:none;margin-top:12px">
-  <div class="small">Enter Admin Password</div>
-  <input id="adminPw" type="password" placeholder="Admin password">
-  <div class="row" style="margin-top:8px">
-    <button onclick="unlockAdmin()">Unlock</button>
-    <button class="secondary" onclick="closeAdmin()">Cancel</button>
-  </div>
-</div>
-
-<!-- Admin Dashboard -->
-<div id="adminPanel" style="display:none;margin-top:12px">
-  <h3>Pending Approvals</h3>
-  <div class="row" style="margin-top:8px">
-  <button onclick="openSyncCloudAdmin()">Sync Cloud</button>
-</div>
-
-  <div id="userList" class="pair-list"></div>
-  <div class="row" style="margin-top:8px">
-    
-    <button class="secondary" onclick="closeAdmin()">Close</button>
-  </div>
-</div>
-
+      
       <div id="deArea" style="display:none;margin-top:12px">
         <div class="small">Pairs (C = cloud, L = local)</div>
         <div id="deList" class="pair-list"></div>
@@ -418,7 +421,15 @@ document.getElementById('editCommission').value = '';
     document.getElementById('adminPanelBtn').style.display = 'block';
   }
 }
-
+// ===== Reset all modal sections =====
+function resetModalSections() {
+    document.getElementById('editor').style.display = 'none';
+    document.getElementById('deArea').style.display = 'none';
+    document.getElementById('syncArea').style.display = 'none';
+    document.getElementById('adminGate').style.display = 'none';
+    document.getElementById('adminPanel').style.display = 'none';
+    document.getElementById('adminPw').value = '';
+}
 function closeModal(){
   document.getElementById('modal').style.display='none';
 
@@ -916,9 +927,11 @@ function unlockAdmin(){
       return;
     }
 
-    document.getElementById('adminGate').style.display = 'none';
-    document.getElementById('adminPanel').style.display = 'block';
-    loadPendingUsers();
+   document.getElementById('adminGate').style.display = 'none';
+resetModalSections();      // <--- Add this to hide all first
+document.getElementById('adminPanel').style.display = 'block';
+loadPendingUsers();
+
   });
 }
 
@@ -932,6 +945,164 @@ function closeAdmin(){
 /* ===== END ADMIN MODAL FUNCTIONS ===== */
 
 
+// ===================== Admin Popup Functions =====================
+function openAdminPopup(){
+  // Close main Add/Edit/Sync modal if open
+  document.getElementById('modal').style.display = 'none';
+
+  // Open Admin Panel popup
+  document.getElementById('adminPopup').style.display = 'flex';
+  document.getElementById('adminPopupGate').style.display = 'block';
+  document.getElementById('adminPopupContent').style.display = 'none';
+  document.getElementById('adminPopupPw').value = '';
+}
+
+
+function closeAdminPopup(){
+  document.getElementById('adminPopup').style.display = 'none';
+}
+
+function unlockAdminPopup(){
+  const pw = document.getElementById('adminPopupPw').value.trim();
+  if(!pw) return;
+
+  authDb.collection("config").doc("admin").get().then(doc=>{
+    if(!doc.exists || doc.data().password !== pw){
+      alert("Wrong admin password");
+      return;
+    }
+
+    document.getElementById('adminPopupGate').style.display = 'none';
+    document.getElementById('adminPopupContent').style.display = 'block';
+    showAdminTab('sync');
+  });
+}
+
+function showAdminTab(tab){
+  document.getElementById('adminSyncTab').style.display = tab==='sync' ? 'block' : 'none';
+  document.getElementById('adminApprovalTab').style.display = tab==='approval' ? 'block' : 'none';
+
+  if(tab==='sync') loadAdminSyncList();
+  if(tab==='approval') loadAdminApprovalList();
+}
+
+// Load cloud/local pairs into admin popup
+function loadAdminSyncList(){
+  const wrap = document.getElementById('adminSyncList');
+  wrap.innerHTML = '';
+
+  // Add Push button row at the top
+const topRow = document.createElement('div');
+topRow.className = 'row';
+topRow.style.marginBottom = '8px';
+
+const pushBtn = document.createElement('button');
+pushBtn.textContent = 'Push Selected to Cloud';
+pushBtn.onclick = pushSelectedAdminCloud;
+
+topRow.appendChild(pushBtn);
+wrap.appendChild(topRow);
+
+  // List pairs
+  Object.keys(pairs).sort().forEach(name => {
+    const p = pairs[name];
+    const div = document.createElement('div');
+    div.className = 'pair-item';
+
+    const span = document.createElement('span');
+    span.textContent = `${name} (${p.type==='cloud'?'C':'L'})`;
+
+    const btns = document.createElement('div');
+
+    if(p.type === 'local'){
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.name = name;
+      btns.appendChild(cb);
+    } else if(p.type === 'cloud'){
+      const edit = document.createElement('button');
+      edit.className = 'small-btn';
+      edit.textContent = 'Edit';
+      edit.onclick = () => openEditCloudPair(name);
+
+      const del = document.createElement('button');
+      del.className = 'small-btn';
+      del.textContent = 'Delete';
+      del.onclick = () => {
+        if(confirm("Delete cloud pair "+name+"?")){
+          db.collection(FIRE_COLLECTION).doc(name).delete();
+          delete pairs[name];
+          saveLocalPairs();
+          loadAdminSyncList();
+        }
+      };
+
+      btns.appendChild(edit);
+      btns.appendChild(del);
+    }
+
+    div.appendChild(span);
+    div.appendChild(btns);
+    wrap.appendChild(div);
+  });
+}
+
+// Function to push selected local pairs to cloud from Admin Popup
+function pushSelectedAdminCloud(){
+  const checkboxes = document.querySelectorAll('#adminSyncList input[type=checkbox]:checked');
+  if(checkboxes.length === 0){
+    alert("Select at least one pair.");
+    return;
+  }
+
+  checkboxes.forEach(cb => {
+    const name = cb.dataset.name;
+    const data = pairs[name];
+    db.collection(FIRE_COLLECTION).doc(name).set({
+      point: data.point,
+      pip: data.pip,
+      commission: data.commission
+    });
+    pairs[name].type = 'cloud';
+  });
+
+  saveLocalPairs();
+  loadAdminSyncList();
+  populateDropdown(); // update main dropdown
+  alert("Selected pairs pushed to cloud.");
+}
+
+// Load pending user approvals
+function loadAdminApprovalList(){
+  const list = document.getElementById('adminApprovalList');
+  list.innerHTML = "Loading...";
+
+  authDb.collection("users").where("approved", "==", false)
+    .get().then(snapshot=>{
+      list.innerHTML = "";
+      if(snapshot.empty){
+        list.innerHTML = "<div class='small'>No pending users</div>";
+        return;
+      }
+      snapshot.forEach(doc=>{
+        const data = doc.data();
+        const div = document.createElement("div");
+        div.className = "pair-item";
+
+        const email = document.createElement("span");
+        email.textContent = data.email || doc.id;
+
+        const btn = document.createElement("button");
+        btn.textContent = "Approve";
+        btn.className = "small-btn";
+        btn.onclick = ()=>approveUser(doc.id);
+
+        div.appendChild(email);
+        div.appendChild(btn);
+        list.appendChild(div);
+      });
+    });
+}
 
 
 // ===================== Reload Cloud =====================
