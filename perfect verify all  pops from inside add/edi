@@ -402,22 +402,18 @@ function clearCalc(){document.getElementById('risk').value='';document.getElemen
 
 // ===================== Modal & Local / Cloud =====================
 function openModal(){
+  // reset fields every time modal opens
+document.getElementById('editName').value = '';
+document.getElementById('editPoint').value = '';
+document.getElementById('editPip').value = '';
+document.getElementById('editCommission').value = '';
+
+
   document.getElementById('modal').style.display='flex';
   document.getElementById('stepUnlock')?.remove();
   document.getElementById('editor').style.display='block';
   document.getElementById('adminPanelBtn').style.display = 'none';
-  const sel=document.getElementById('pairSelect').value;
-  if(pairs[sel]){
-    document.getElementById('editName').value=sel;
-    document.getElementById('editPoint').value=pairs[sel].point;
-    document.getElementById('editPip').value=pairs[sel].pip;
-    document.getElementById('editCommission').value=pairs[sel].commission;
-  } else {
-    document.getElementById('editName').value='';
-    document.getElementById('editPoint').value='';
-    document.getElementById('editPip').value='';
-    document.getElementById('editCommission').value='';
-  }
+
   if(window.IS_ADMIN){
     document.getElementById('adminPanelBtn').style.display = 'block';
   }
@@ -454,8 +450,18 @@ function saveLocalPair(){
 
   saveLocalPairs();
   populateDropdown();
-  
-  alert(`Local pair "${name}" saved successfully.`);
+  // reset add/edit fields
+document.getElementById('editName').value = '';
+document.getElementById('editPoint').value = '';
+document.getElementById('editPip').value = '';
+document.getElementById('editCommission').value = '';
+// CLOSE add/edit modal FIRST
+document.getElementById('modal').style.display = 'none';
+  showInfoModal(
+  "Saved Successfully",
+  `Local pair "${name}" saved successfully.`
+);
+
 }
 
 // ===================== Cloud Sync =====================
@@ -823,16 +829,20 @@ function closeVerifyModal(){
 
 function closeInfoModal(){
   document.getElementById('infoModal').style.display = 'none';
-  auth.signOut();
-  // reset forgot password UI
-document.getElementById('forgotEmailWrap').style.display = 'none';
-document.getElementById('forgotEmail').value = '';
-document.getElementById('forgotMsg').innerText = '';
 
+  // reset forgot password UI (safe)
+  document.getElementById('forgotEmailWrap').style.display = 'none';
+  document.getElementById('forgotEmail').value = '';
+  document.getElementById('forgotMsg').innerText = '';
 
-  document.getElementById('authSection').style.display = 'block';
-  document.getElementById('calcSection').style.display = 'none';
+  // CLOSE add/edit/sync modal if open
+  document.getElementById('modal').style.display = 'none';
+
+  // STAY on calculator page
+  document.getElementById('authSection').style.display = 'none';
+  document.getElementById('calcSection').style.display = 'block';
 }
+
 
 
 // ===================== Admin functions =====================
