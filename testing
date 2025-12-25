@@ -114,7 +114,7 @@ button.secondary{background:#eee;color:#111}
 
 <div class="wrap">
   <div class="card">
-    <h1>R-Calculator6</h1>
+    <h1>R-Calculator2</h1>
 
     <!-- Authentication Section -->
     <div id="authSection">
@@ -313,7 +313,7 @@ const FIRE_COLLECTION="cloudPairs";
   
 let pairs={};
 let USER_APPROVED = false;
-
+let adminUnlocked = false;
 // ===================== Load / Save Pairs =====================
 const defaultPairs = {};
 
@@ -811,6 +811,7 @@ function create(){
 
 
 function logout(){
+  adminUnlocked = false; // <-- reset admin unlocked state
   auth.signOut();
 }
 
@@ -952,10 +953,20 @@ function openAdminPopup(){
 
   // Open Admin Panel popup
   document.getElementById('adminPopup').style.display = 'flex';
-  document.getElementById('adminPopupGate').style.display = 'block';
-  document.getElementById('adminPopupContent').style.display = 'none';
-  document.getElementById('adminPopupPw').value = '';
+
+  if(adminUnlocked){
+    // Already unlocked → show content directly
+    document.getElementById('adminPopupGate').style.display = 'none';
+    document.getElementById('adminPopupContent').style.display = 'block';
+    showAdminTab('sync');
+  } else {
+    // Not unlocked → show password input
+    document.getElementById('adminPopupGate').style.display = 'block';
+    document.getElementById('adminPopupContent').style.display = 'none';
+    document.getElementById('adminPopupPw').value = '';
+  }
 }
+
 
 
 function closeAdminPopup(){
@@ -963,6 +974,13 @@ function closeAdminPopup(){
 }
 
 function unlockAdminPopup(){
+  if(adminUnlocked){ // <-- already unlocked
+    document.getElementById('adminPopupGate').style.display = 'none';
+    document.getElementById('adminPopupContent').style.display = 'block';
+    showAdminTab('sync');
+    return;
+  }
+
   const pw = document.getElementById('adminPopupPw').value.trim();
   if(!pw) return;
 
@@ -972,6 +990,7 @@ function unlockAdminPopup(){
       return;
     }
 
+    adminUnlocked = true; // <-- remember unlocked state
     document.getElementById('adminPopupGate').style.display = 'none';
     document.getElementById('adminPopupContent').style.display = 'block';
     showAdminTab('sync');
