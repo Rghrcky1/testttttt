@@ -114,7 +114,7 @@ button.secondary{background:#eee;color:#111}
 
 <div class="wrap">
   <div class="card">
-    <h1>R-Calculator2 </h1>
+    <h1>R-Calculator</h1>
 
     <!-- Authentication Section -->
     <div id="authSection">
@@ -222,7 +222,7 @@ button.secondary{background:#eee;color:#111}
 
       <!-- Sync Cloud Tab -->
       <div id="adminSyncTab" style="display:none; margin-top:12px">
-        <button onclick="openSyncCloudAdmin()">Reload Pairs</button>
+       
         <div id="adminSyncList" class="pair-list" style="margin-top:8px"></div>
       </div>
 
@@ -237,7 +237,18 @@ button.secondary{background:#eee;color:#111}
     </div>
   </div>
 </div>
+<!-- DELETE / EDIT POPUP MODAL -->
+<div id="deleteEditPopup" class="modal" style="display:none;">
+  <div class="panel" role="dialog" aria-modal="true" style="max-width:720px;">
+    <h3>Delete / Edit Pairs</h3>
 
+    <div id="deleteEditList" class="pair-list" style="margin-top:12px"></div>
+
+    <div style="margin-top:12px">
+      <button class="secondary" onclick="closeDeleteEditPopup()">Close</button>
+    </div>
+  </div>
+</div>
 
 <!-- Modal Editor -->
 <div id="modal" class="modal" aria-hidden="true">
@@ -256,7 +267,8 @@ button.secondary{background:#eee;color:#111}
     <div class="row" style="margin-top:8px">
   <button onclick="saveLocalPair()">Save Local</button>
   
-   <button class="secondary" onclick="openDeleteEdit()">Delete / Edit</button>
+   <button class="secondary" onclick="openDeleteEditPopup()">Delete / Edit</button>
+
 </div>
 
 <div class="row" style="margin-top:8px">
@@ -266,51 +278,6 @@ button.secondary{background:#eee;color:#111}
 
       <div style="margin-top:8px">
         <button class="secondary" onclick="closeModal()">Close</button>
-      </div>
-
-     <!-- Sync area (for Admin Panel) -->
-<div id="syncArea" style="display:none;margin-top:12px">
-  <div class="small">Select LOCAL pairs to push to cloud</div>
-  <div id="syncListWrap" style="display:block;margin-top:10px">
-    <div id="syncList" class="pair-list"></div>
-    <div class="row" style="margin-top:8px">
-      <button onclick="pushSelectedToCloud()">Push Selected to Cloud</button>
-      <button class="secondary" onclick="closeSyncArea()">Done</button>
-    </div>
-  </div>
-</div>
-
-      <!-- Delete/Edit area -->
-      <!-- Admin Gate -->
-<div id="adminGate" style="display:none;margin-top:12px">
-  <div class="small">Enter Admin Password</div>
-  <input id="adminPw" type="password" placeholder="Admin password">
-  <div class="row" style="margin-top:8px">
-    <button onclick="unlockAdmin()">Unlock</button>
-    <button class="secondary" onclick="closeAdmin()">Cancel</button>
-  </div>
-</div>
-
-<!-- Admin Dashboard -->
-<div id="adminPanel" style="display:none;margin-top:12px">
-  <h3>Pending Approvals</h3>
-  <div class="row" style="margin-top:8px">
-  <button onclick="openSyncCloudAdmin()">Sync Cloud</button>
-</div>
-
-  <div id="userList" class="pair-list"></div>
-  <div class="row" style="margin-top:8px">
-    
-    <button class="secondary" onclick="closeAdmin()">Close</button>
-  </div>
-</div>
-
-      <div id="deArea" style="display:none;margin-top:12px">
-        <div class="small">Pairs (C = cloud, L = local)</div>
-        <div id="deList" class="pair-list"></div>
-        <div class="row" style="margin-top:8px">
-          <button class="secondary" onclick="closeDeleteEdit()">Close</button>
-        </div>
       </div>
     </div>
   </div>
@@ -350,7 +317,7 @@ const FIRE_COLLECTION="cloudPairs";
   
 let pairs={};
 let USER_APPROVED = false;
-
+let adminUnlocked = false;
 // ===================== Load / Save Pairs =====================
 const defaultPairs = {};
 
@@ -389,12 +356,23 @@ let unsubscribeSnapshot = null;
 function startCloudListener(){
   if(unsubscribeSnapshot) unsubscribeSnapshot();
   unsubscribeSnapshot=db.collection(FIRE_COLLECTION).onSnapshot(snapshot=>{
-    snapshot.forEach(doc=>{
-      const name=doc.id;
-      const data=doc.data();
-      const local=pairs[name];
-      pairs[name]={point:data.point??(local?local.point:0),pip:data.pip??(local?local.pip:0),commission:(local&&local.commission!==undefined)?local.commission:(data.commission??0),order:typeof data.order==='number'?data.order:(local&&typeof local.order==='number'?local.order:null),type:'cloud'};
-    });
+   snapshot.forEach(doc=>{
+  const name = doc.id;
+  const data = doc.data();
+  const local = pairs[name];
+
+  // PRESERVE LOCAL ORDER IF EXISTS
+  const existingOrder = (local && typeof local.order === 'number') ? local.order : (typeof data.order === 'number' ? data.order : Object.keys(pairs).length);
+
+  pairs[name] = {
+    point: data.point ?? (local ? local.point : 0),
+    pip: data.pip ?? (local ? local.pip : 0),
+    commission: (local && local.commission !== undefined) ? local.commission : (data.commission ?? 0),
+    order: existingOrder,
+    type: 'cloud'
+  };
+});
+
     const cloudIds=new Set(snapshot.docs.map(d=>d.id));
     Object.keys(pairs).forEach(k=>{
       if(pairs[k].type==='cloud'&&!cloudIds.has(k)){
@@ -488,9 +466,8 @@ function saveLocalPair(){
   const commission=parseFloat(document.getElementById('editCommission').value);
   if(!name||isNaN(point)||isNaN(pip)||isNaN(commission)){alert("Enter valid name, point, pip and commission.");return;}
 
-  const order = typeof pairs[name]?.order === 'number'
-    ? pairs[name].order
-    : Object.keys(pairs).length;
+ 
+const order = (pairs[name] && typeof pairs[name].order === 'number') ? pairs[name].order : Object.keys(pairs).length;
 
   const type = pairs[name]?.type === 'cloud' ? 'cloud' : 'local';
 
@@ -677,104 +654,7 @@ function pushSelectedToCloud(){
   alert("Selected pairs pushed to cloud.");
 }
 
-// ===================== Delete / Edit =====================
-function openDeleteEdit(){
-const wrap=document.getElementById('deList');
-wrap.innerHTML='';
 
-
-getOrderedKeys().forEach(name=>{
-const div=document.createElement('div');
-div.className='pair-item';
-
-
-const label=document.createElement('span');
-label.textContent=`${name} (${pairs[name].type==='cloud'?'C':'L'})`;
-
-
-const btns=document.createElement('div');
-
-
-// DELETE — ONLY LOCAL
-if(pairs[name].type !== 'cloud'){
-const del=document.createElement('button');
-del.className='small-btn';
-del.textContent='Delete';
-del.onclick=()=>{
-if(confirm("Delete "+name+"?")){
-delete pairs[name];
-saveLocalPairs();
-populateDropdown();
-openDeleteEdit();
-}
-};
-btns.appendChild(del);
-}
-
-
-// MOVE UP
-const up=document.createElement('button');
-up.className='small-btn';
-up.textContent='↑';
-up.onclick=()=>moveUp(name);
-
-
-// MOVE DOWN
-const down=document.createElement('button');
-down.className='small-btn';
-down.textContent='↓';
-down.onclick=()=>moveDown(name);
-
-
-btns.appendChild(up);
-btns.appendChild(down);
-
-
-div.appendChild(label);
-div.appendChild(btns);
-wrap.appendChild(div);
-});
-
-
-document.getElementById('deArea').style.display='block';
-}
-function closeDeleteEdit(){document.getElementById('deArea').style.display='none';}
-function getOrderedKeys(){
-  return Object.keys(pairs)
-    .map((k,i) => ({
-      k,
-      order: typeof pairs[k].order === 'number' ? pairs[k].order : i
-    }))
-    .sort((a,b) => a.order - b.order)
-    .map(o => o.k);
-}
-function applyOrderFromArray(arr){
-  arr.forEach((k,i)=>{
-    pairs[k].order = i;
-  });
-}
-function moveUp(name){
-  const arr = getOrderedKeys();
-  const idx = arr.indexOf(name);
-  if(idx > 0){
-    [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
-    applyOrderFromArray(arr);
-    saveLocalPairs();
-    populateDropdown();
-    openDeleteEdit();
-  }
-}
-function moveDown(name){
-  const arr = getOrderedKeys();
-  const idx = arr.indexOf(name);
-  if(idx < arr.length - 1){
-    [arr[idx+1], arr[idx]] = [arr[idx], arr[idx+1]];
-    applyOrderFromArray(arr);
-    saveLocalPairs();
-    populateDropdown();
-    openDeleteEdit();
-  }
-}
 
 // ===================== Login / Signup / Logout =====================
 function login(){
@@ -848,6 +728,7 @@ function create(){
 
 
 function logout(){
+  adminUnlocked = false; // <-- reset admin unlocked state
   auth.signOut();
 }
 
@@ -989,10 +870,20 @@ function openAdminPopup(){
 
   // Open Admin Panel popup
   document.getElementById('adminPopup').style.display = 'flex';
-  document.getElementById('adminPopupGate').style.display = 'block';
-  document.getElementById('adminPopupContent').style.display = 'none';
-  document.getElementById('adminPopupPw').value = '';
+
+  if(adminUnlocked){
+    // Already unlocked → show content directly
+    document.getElementById('adminPopupGate').style.display = 'none';
+    document.getElementById('adminPopupContent').style.display = 'block';
+    showAdminTab('sync');
+  } else {
+    // Not unlocked → show password input
+    document.getElementById('adminPopupGate').style.display = 'block';
+    document.getElementById('adminPopupContent').style.display = 'none';
+    document.getElementById('adminPopupPw').value = '';
+  }
 }
+
 
 
 function closeAdminPopup(){
@@ -1000,6 +891,13 @@ function closeAdminPopup(){
 }
 
 function unlockAdminPopup(){
+  if(adminUnlocked){ // <-- already unlocked
+    document.getElementById('adminPopupGate').style.display = 'none';
+    document.getElementById('adminPopupContent').style.display = 'block';
+    showAdminTab('sync');
+    return;
+  }
+
   const pw = document.getElementById('adminPopupPw').value.trim();
   if(!pw) return;
 
@@ -1009,6 +907,7 @@ function unlockAdminPopup(){
       return;
     }
 
+    adminUnlocked = true; // <-- remember unlocked state
     document.getElementById('adminPopupGate').style.display = 'none';
     document.getElementById('adminPopupContent').style.display = 'block';
     showAdminTab('sync');
@@ -1027,6 +926,20 @@ function showAdminTab(tab){
 function loadAdminSyncList(){
   const wrap = document.getElementById('adminSyncList');
   wrap.innerHTML = '';
+
+  // Add Push button row at the top
+const topRow = document.createElement('div');
+topRow.className = 'row';
+topRow.style.marginBottom = '8px';
+
+const pushBtn = document.createElement('button');
+pushBtn.textContent = 'Push Selected to Cloud';
+pushBtn.onclick = pushSelectedAdminCloud;
+
+topRow.appendChild(pushBtn);
+wrap.appendChild(topRow);
+
+  // List pairs
   Object.keys(pairs).sort().forEach(name => {
     const p = pairs[name];
     const div = document.createElement('div');
@@ -1070,6 +983,31 @@ function loadAdminSyncList(){
   });
 }
 
+// Function to push selected local pairs to cloud from Admin Popup
+function pushSelectedAdminCloud(){
+  const checkboxes = document.querySelectorAll('#adminSyncList input[type=checkbox]:checked');
+  if(checkboxes.length === 0){
+    alert("Select at least one pair.");
+    return;
+  }
+
+  checkboxes.forEach(cb => {
+    const name = cb.dataset.name;
+    const data = pairs[name];
+    db.collection(FIRE_COLLECTION).doc(name).set({
+      point: data.point,
+      pip: data.pip,
+      commission: data.commission
+    });
+    pairs[name].type = 'cloud';
+  });
+
+  saveLocalPairs();
+  loadAdminSyncList();
+  populateDropdown(); // update main dropdown
+  alert("Selected pairs pushed to cloud.");
+}
+
 // Load pending user approvals
 function loadAdminApprovalList(){
   const list = document.getElementById('adminApprovalList');
@@ -1100,6 +1038,191 @@ function loadAdminApprovalList(){
         list.appendChild(div);
       });
     });
+}
+  function getOrderedKeys(){
+  return Object.keys(pairs)
+    .map(name => ({
+      name,
+      order: typeof pairs[name].order === 'number'
+        ? pairs[name].order
+        : 9999
+    }))
+    .sort((a,b)=>a.order-b.order)
+    .map(o=>o.name);
+}
+
+function moveUp(name){
+  const keys = getOrderedKeys();
+  const i = keys.indexOf(name);
+  if(i <= 0) return;
+
+  const a = keys[i];
+  const b = keys[i-1];
+
+  const tmp = pairs[a].order;
+  pairs[a].order = pairs[b].order;
+  pairs[b].order = tmp;
+
+  saveLocalPairs();
+  populateDropdown();
+}
+
+function moveDown(name){
+  const keys = getOrderedKeys();
+  const i = keys.indexOf(name);
+  if(i === -1 || i === keys.length-1) return;
+
+  const a = keys[i];
+  const b = keys[i+1];
+
+  const tmp = pairs[a].order;
+  pairs[a].order = pairs[b].order;
+  pairs[b].order = tmp;
+
+  saveLocalPairs();
+  populateDropdown();
+}
+  function reorderPairs(from, to){
+  const keys = getOrderedKeys();
+  const fromIndex = keys.indexOf(from);
+  const toIndex = keys.indexOf(to);
+
+  if(fromIndex === -1 || toIndex === -1) return;
+
+  keys.splice(fromIndex, 1);
+  keys.splice(toIndex, 0, from);
+
+  keys.forEach((k,i)=>{
+    pairs[k].order = i;
+  });
+
+  saveLocalPairs();
+  populateDropdown();
+}
+
+function normalizePairOrder(){
+  let i = 0;
+  getOrderedKeys().forEach(name=>{
+    pairs[name].order = i++;
+  });
+  saveLocalPairs();
+}
+
+// ===================== Delete / Edit Popup =====================
+function openDeleteEditPopup(){
+  // ✅ CLOSE Add / Edit / Sync modal FIRST
+  const mainModal = document.getElementById('modal');
+  mainModal.style.display = 'none';
+  mainModal.setAttribute('aria-hidden','true');
+
+  const wrap = document.getElementById('deleteEditList');
+  wrap.innerHTML = '';
+
+  getOrderedKeys().forEach(name=>{
+    const p = pairs[name];
+
+    const row = document.createElement('div');
+row.className = 'pair-item';
+row.draggable = true;
+row.dataset.name = name;
+row.addEventListener('dragstart', e=>{
+  e.dataTransfer.setData('text/plain', name);
+});
+
+row.addEventListener('dragover', e=>{
+  e.preventDefault();
+  row.style.background = '#e8f0ff';
+});
+
+row.addEventListener('dragleave', ()=>{
+  row.style.background = '';
+});
+
+row.addEventListener('drop', e=>{
+  e.preventDefault();
+  row.style.background = '';
+
+  const from = e.dataTransfer.getData('text/plain');
+  const to = name;
+
+  if(from === to) return;
+
+  reorderPairs(from, to);
+  openDeleteEditPopup();
+});
+
+
+    const label = document.createElement('span');
+    label.textContent = `${name} (${p.type==='cloud'?'C':'L'})`;
+
+    const btns = document.createElement('div');
+
+    // LOCAL → EDIT
+    if(p.type === 'local'){
+      const edit = document.createElement('button');
+      edit.className = 'small-btn';
+      edit.textContent = 'Edit';
+      edit.onclick = ()=>{
+        closeDeleteEditPopup();
+        openModal();
+
+        document.getElementById('editName').value = name;
+        document.getElementById('editPoint').value = p.point;
+        document.getElementById('editPip').value = p.pip;
+        document.getElementById('editCommission').value = p.commission;
+      };
+      btns.appendChild(edit);
+    }
+
+    // LOCAL → DELETE
+    if(p.type === 'local'){
+      const del = document.createElement('button');
+      del.className = 'small-btn';
+      del.textContent = 'Delete';
+      del.onclick = ()=>{
+        if(confirm(`Delete ${name}?`)){
+          delete pairs[name];
+          saveLocalPairs();
+          populateDropdown();
+          openDeleteEditPopup();
+        }
+      };
+      btns.appendChild(del);
+    }
+
+    // MOVE UP
+    const up = document.createElement('button');
+    up.className = 'small-btn';
+    up.textContent = '↑';
+    up.onclick = ()=>{
+      moveUp(name);
+      openDeleteEditPopup();
+    };
+
+    // MOVE DOWN
+    const down = document.createElement('button');
+    down.className = 'small-btn';
+    down.textContent = '↓';
+    down.onclick = ()=>{
+      moveDown(name);
+      openDeleteEditPopup();
+    };
+
+    btns.appendChild(up);
+    btns.appendChild(down);
+
+    row.appendChild(label);
+    row.appendChild(btns);
+    wrap.appendChild(row);
+  });
+
+  // ✅ OPEN Delete/Edit popup ONLY
+  document.getElementById('deleteEditPopup').style.display='flex';
+}
+
+
+function closeDeleteEditPopup(){
+  document.getElementById('deleteEditPopup').style.display = 'none';
 }
 
 
@@ -1159,8 +1282,12 @@ auth.onAuthStateChanged(user=>{
 }
 
        loadLocalPairs();
-      populateDropdown();
-      startCloudListener();
+    // Only normalize if some pairs have no order
+if(Object.values(pairs).some(p => typeof p.order !== 'number')){
+  normalizePairOrder();
+}
+populateDropdown();
+startCloudListener();
     });
   });
 
